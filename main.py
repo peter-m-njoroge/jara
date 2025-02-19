@@ -85,34 +85,31 @@ class MpesaManager:
 # ========== MAIN APP ==========
 def main(page: ft.Page):
     page.title = "TaskerApp"
-    page.theme_mode = ft.ThemeMode.LIGHT
-    page.padding = 20
+    page.theme = ft.Theme(color_scheme_seed=ft.colors.BLUE)
+    page.bgcolor = ft.colors.GREY_100
     
     current_user = None
-    selected_job = None
+    
+    def login_view():
+        phone = ft.TextField(label="Phone Number", prefix_text="+254", bgcolor=ft.colors.WHITE, border_radius=8)
+        otp = ft.TextField(label="OTP", visible=False, bgcolor=ft.colors.WHITE, border_radius=8)
+        send_otp_btn = ft.FilledButton("Send OTP", icon=ft.icons.SEND, on_click=lambda e: send_otp(phone.value))
+        verify_btn = ft.FilledButton("Verify", icon=ft.icons.CHECK, on_click=lambda e: verify_otp(phone.value, otp.value), visible=False)
 
-    # ========== AUTHENTICATION ==========
-    def show_auth_dialog():
-        phone = ft.TextField(label="Safaricom Number", prefix_text="+254")
-        otp = ft.TextField(label="OTP", visible=False)
-        send_otp_btn = ft.ElevatedButton("Send OTP", on_click=lambda e: send_otp(phone.value))
-        verify_btn = ft.ElevatedButton("Verify", on_click=lambda e: verify_otp(phone.value, otp.value), visible=False)
-        
         def send_otp(number):
             if len(number) != 9 or not number.startswith('7'):
-                page.snackbar = ft.SnackBar(ft.Text("Invalid Safaricom number!"))
+                page.snack_bar = ft.SnackBar(ft.Text("Invalid Safaricom number!", color=ft.colors.RED))
+                page.snack_bar.open = True
                 page.update()
                 return
-            
-            # In production: Send real OTP via SMS
-            otp.value = "1234"  # Mock OTP
+            otp.value = "1234"
             otp.visible = True
             verify_btn.visible = True
             page.update()
-        
+
         def verify_otp(number, code):
             nonlocal current_user
-            if code == "1234":  # Mock verification
+            if code == "1234":
                 current_user = {
                     'id': str(uuid.uuid4()),
                     'phone': f"+254{number}",
@@ -123,117 +120,23 @@ def main(page: ft.Page):
                 }
                 db.users.append(current_user)
                 db.save_data()
-                page.go("/role_selection")
+                page.go("/main")
             page.update()
-        
-        page.dialog = ft.AlertDialog(
-            title=ft.Text("Phone Verification"),
-            content=ft.Column([phone, otp], tight=True),
-            actions=[send_otp_btn, verify_btn]
-        )
-        page.dialog.open = True
-        page.update()
 
-    # ========== PAYMENT HANDLING ==========
-    def handle_payment(amount, purpose):
-        response = MpesaManager.stk_push(
-            phone=current_user['phone'],
-            amount=amount,
-            reference=purpose
-        )
-        
-        if response.get('ResponseCode') == '0':
-            db.transactions.append({
-                'user_id': current_user['id'],
-                'amount': amount,
-                'purpose': purpose,
-                'timestamp': datetime.now().isoformat()
-            })
-            db.save_data()
-            return True
-        return False
-
-    # ========== RATING SYSTEM ==========
-    def submit_review(tasker_id, rating, comment):
-        db.reviews.append({
-            'tasker_id': tasker_id,
-            'client_id': current_user['id'],
-            'rating': rating,
-            'comment': comment,
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        # Update tasker rating
-        tasker = next(u for u in db.users if u['id'] == tasker_id)
-        ratings = [r['rating'] for r in db.reviews if r['tasker_id'] == tasker_id]
-        tasker['rating'] = sum(ratings) / len(ratings)
-        db.save_data()
-
-    # ========== PAGE VIEWS ==========
-    def role_selection_view():
-        def select_role(e):
-            current_user['is_tasker'] = (e.control.text == "Tasker")
-            if current_user['is_tasker'] and not handle_payment(100, "registration"):
-                page.snackbar = ft.SnackBar(ft.Text("Registration payment failed!"))
-                return
-            page.go("/main")
-        
         return ft.View(
-            "/role_selection",
-            [
+            "/login",
+            controls=[
                 ft.Column([
-                    ft.Text("Select Your Role"),
-                    ft.ElevatedButton("Client", on_click=select_role),
-                    ft.ElevatedButton("Tasker (KES 100 fee)", on_click=select_role)
+                    ft.Icon(name=ft.icons.WORK, size=80, color=ft.colors.BLUE),
+                    ft.Text("Welcome to TaskerApp", size=24, weight=ft.FontWeight.BOLD),
+                    phone,
+                    otp,
+                    send_otp_btn,
+                    verify_btn
                 ], alignment=ft.MainAxisAlignment.CENTER)
             ]
         )
-    def login_view():
-        phone = ft.TextField(label="Safaricom Number", prefix_text="+254")
-        otp = ft.TextField(label="OTP", visible=False)
-        send_otp_btn = ft.ElevatedButton("Send OTP", on_click=lambda e: send_otp(phone.value))
-        verify_btn = ft.ElevatedButton("Verify", on_click=lambda e: verify_otp(phone.value, otp.value), visible=False)
-
-        def send_otp(number):
-            if len(number) != 9 or not number.startswith('7'):
-                page.snackbar = ft.SnackBar(ft.Text("Invalid Safaricom number!"))
-                page.update()
-                return
-        otp.value = "1234"  # Mock OTP
-        otp.visible = True
-        verify_btn.visible = True
-        page.update()
-
-        def verify_otp(number, code):
-            nonlocal current_user
-            if code == "1234":  # Mock verification
-                current_user = {
-                'id': str(uuid.uuid4()),
-                'phone': f"+254{number}",
-                'is_tasker': False,
-                'balance': 0.0,
-                'rating': 0.0,
-                'reviews': []
-                }
-                db.users.append(current_user)
-                db.save_data()
-                page.go("/role_selection")
-            page.update()
-
-        return ft.View(
-             "/login",
-            [
-            ft.Column([
-                ft.Text("Login"),
-                phone,
-                otp,
-                send_otp_btn,
-                verify_btn
-            ], alignment=ft.MainAxisAlignment.CENTER)
-        ]
-    )
-
-
+    
     def main_view():
         jobs_column = ft.Column()
         
@@ -241,65 +144,38 @@ def main(page: ft.Page):
             jobs_column.controls.clear()
             for job in db.jobs:
                 jobs_column.controls.append(
-                    ft.ListTile(
-                        title=ft.Text(job['title']),
-                        subtitle=ft.Text(job['description']),
-                        trailing=ft.Text(f"KES {job['budget']}"),
-                        on_click=lambda e, j=job: show_job_details(j)
+                    ft.Card(
+                        content=ft.ListTile(
+                            title=ft.Text(job['title'], weight=ft.FontWeight.BOLD),
+                            subtitle=ft.Text(job['description']),
+                            trailing=ft.Text(f"KES {job['budget']}", weight=ft.FontWeight.BOLD, color=ft.colors.GREEN),
+                            on_click=lambda e, j=job: page.snack_bar(ft.SnackBar(ft.Text(f"Selected: {j['title']}")))
+                        )
                     )
                 )
-            page.update()
-        
-        def show_job_details(job):
-            nonlocal selected_job
-            selected_job = job
-            
-            # Rating UI
-            rating = ft.Slider(min=1, max=5, divisions=4, label="Rating")
-            review = ft.TextField(label="Your review")
-            
-            page.dialog = ft.AlertDialog(
-                title=ft.Text("Job Completion"),
-                content=ft.Column([
-                    ft.Text("Rate the tasker:"),
-                    rating,
-                    review
-                ]),
-                actions=[
-                    ft.TextButton("Submit", on_click=lambda e: submit_review(
-                        job['tasker_id'],
-                        rating.value,
-                        review.value
-                    ))
-                ]
-            )
-            page.dialog.open = True
             page.update()
         
         load_jobs()
         return ft.View(
             "/main",
-            [
-                ft.AppBar(title=ft.Text("Available Jobs")),
+            controls=[
+                ft.AppBar(title=ft.Text("Available Jobs"), bgcolor=ft.colors.BLUE),
                 ft.FloatingActionButton(
-                    icon=ft.icons.ADD,
-                    on_click=lambda e: page.go("/post_job")
+                    icon=ft.icons.ADD, bgcolor=ft.colors.BLUE, on_click=lambda e: page.snack_bar(ft.SnackBar(ft.Text("Post Job Coming Soon")))
                 ),
                 jobs_column
             ]
         )
 
-    # ========== ROUTING ==========
     def route_change(e):
-        if page.route == "/role_selection":
-            page.views.append(role_selection_view())
+        if page.route == "/login":
+            page.views.append(login_view())
         elif page.route == "/main":
             page.views.append(main_view())
-        elif page.route == "/login":
-            page.views.append(login_view())  # Create a login view
         page.update()
 
     page.on_route_change = route_change
     page.go("/login")
 
-ft.app(target=main, view=ft.WEB_BROWSER)
+ft.app(target=main)
+
