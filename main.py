@@ -188,6 +188,51 @@ def main(page: ft.Page):
                 ], alignment=ft.MainAxisAlignment.CENTER)
             ]
         )
+    def login_view():
+        phone = ft.TextField(label="Safaricom Number", prefix_text="+254")
+        otp = ft.TextField(label="OTP", visible=False)
+        send_otp_btn = ft.ElevatedButton("Send OTP", on_click=lambda e: send_otp(phone.value))
+        verify_btn = ft.ElevatedButton("Verify", on_click=lambda e: verify_otp(phone.value, otp.value), visible=False)
+
+        def send_otp(number):
+            if len(number) != 9 or not number.startswith('7'):
+                page.snackbar = ft.SnackBar(ft.Text("Invalid Safaricom number!"))
+                page.update()
+                return
+        otp.value = "1234"  # Mock OTP
+        otp.visible = True
+        verify_btn.visible = True
+        page.update()
+
+        def verify_otp(number, code):
+            nonlocal current_user
+            if code == "1234":  # Mock verification
+                current_user = {
+                'id': str(uuid.uuid4()),
+                'phone': f"+254{number}",
+                'is_tasker': False,
+                'balance': 0.0,
+                'rating': 0.0,
+                'reviews': []
+                }
+                db.users.append(current_user)
+                db.save_data()
+                page.go("/role_selection")
+            page.update()
+
+        return ft.View(
+             "/login",
+            [
+            ft.Column([
+                ft.Text("Login"),
+                phone,
+                otp,
+                send_otp_btn,
+                verify_btn
+            ], alignment=ft.MainAxisAlignment.CENTER)
+        ]
+    )
+
 
     def main_view():
         jobs_column = ft.Column()
@@ -250,9 +295,11 @@ def main(page: ft.Page):
             page.views.append(role_selection_view())
         elif page.route == "/main":
             page.views.append(main_view())
+        elif page.route == "/login":
+            page.views.append(login_view())  # Create a login view
         page.update()
 
     page.on_route_change = route_change
-    show_auth_dialog()
+    page.go("/login")
 
 ft.app(target=main, view=ft.WEB_BROWSER)
