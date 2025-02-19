@@ -3,6 +3,7 @@ import uuid
 import json
 import base64
 import requests
+import os
 from datetime import datetime
 from flet import colors, icons
 
@@ -349,4 +350,6 @@ def main(page: ft.Page):
     page.on_route_change = route_change
     page.go("/login")
 
-ft.app(target=main, view=ft.WEB_BROWSER, port=8500)
+
+port = int(os.getenv("PORT", 8500))
+ft.app(target=main, view=ft.WEB_BROWSER, port=port)
