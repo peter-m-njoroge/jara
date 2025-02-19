@@ -4,6 +4,7 @@ import json
 import base64
 import requests
 from datetime import datetime
+from flet import colors, icons
 
 # ========== CONFIGURATION ==========
 MPESA_SHORTCODE = "YOUR_SHORTCODE"
@@ -85,24 +86,98 @@ class MpesaManager:
 # ========== MAIN APP ==========
 def main(page: ft.Page):
     page.title = "TaskerApp"
-    page.theme = ft.Theme(color_scheme_seed=ft.colors.BLUE)
-    page.bgcolor = ft.colors.GREY_100
+    page.theme = ft.Theme(
+        color_scheme=ft.ColorScheme(
+            primary=ft.colors.BLUE_800,
+            secondary=ft.colors.AMBER_600,
+            surface=ft.colors.GREY_100,
+        ),
+        text_theme=ft.TextTheme(
+            body_medium=ft.TextStyle(
+                color=ft.colors.GREY_800,
+                font_family="Poppins"
+            )
+        ),
+    )
+    page.fonts = {
+        "Poppins": "https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap"
+    }
+    page.bgcolor = ft.colors.GREY_50
+    page.padding = 0
     
     current_user = None
-    
-    def login_view():
-        phone = ft.TextField(label="Phone Number", prefix_text="+254", bgcolor=ft.colors.WHITE, border_radius=8)
-        otp = ft.TextField(label="OTP", visible=False, bgcolor=ft.colors.WHITE, border_radius=8)
-        send_otp_btn = ft.FilledButton("Send OTP", icon=ft.icons.SEND, on_click=lambda e: send_otp(phone.value))
-        verify_btn = ft.FilledButton("Verify", icon=ft.icons.CHECK, on_click=lambda e: verify_otp(phone.value, otp.value), visible=False)
+    selected_job = None
+
+    # ========== UI COMPONENTS ==========
+    def create_app_bar(title):
+        return ft.AppBar(
+            title=ft.Text(title, style=ft.TextStyle(font_family="Poppins")),
+            bgcolor=ft.colors.BLUE_800,
+            color=ft.colors.WHITE,
+            center_title=True,
+            elevation=4
+        )
+
+    def create_loading_indicator():
+        return ft.Container(
+            content=ft.ProgressRing(),
+            alignment=ft.alignment.center,
+            bgcolor=ft.colors.BLACK54,
+            expand=True
+        )
+
+    # ========== AUTHENTICATION ==========
+    def show_login():
+        phone = ft.TextField(
+            label="Safaricom Number",
+            prefix_text="+254",
+            border_radius=12,
+            border_color=ft.colors.BLUE_200,
+            focused_border_color=ft.colors.BLUE_800,
+            width=300
+        )
+        
+        otp = ft.TextField(
+            label="OTP Code",
+            visible=False,
+            border_radius=12,
+            password=True
+        )
+        
+        send_otp_btn = ft.FilledButton(
+            "Send OTP",
+            icon=icons.SEND,
+            style=ft.ButtonStyle(
+                bgcolor=ft.colors.BLUE_800,
+                padding=20,
+                shape=ft.RoundedRectangleBorder(radius=12)
+            ),
+            on_click=lambda e: send_otp(phone.value)
+        )
+        
+        verify_btn = ft.FilledButton(
+            "Verify",
+            icon=icons.CHECK,
+            visible=False,
+            style=ft.ButtonStyle(
+                bgcolor=ft.colors.AMBER_600,
+                padding=20,
+                shape=ft.RoundedRectangleBorder(radius=12)
+            ),
+            on_click=lambda e: verify_otp(phone.value, otp.value)
+        )
 
         def send_otp(number):
             if len(number) != 9 or not number.startswith('7'):
-                page.snack_bar = ft.SnackBar(ft.Text("Invalid Safaricom number!", color=ft.colors.RED))
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("Invalid Safaricom number!"),
+                    bgcolor=ft.colors.RED_400
+                )
                 page.snack_bar.open = True
                 page.update()
                 return
-            otp.value = "1234"
+            
+            otp.value = "1234"  # Mock OTP
             otp.visible = True
             verify_btn.visible = True
             page.update()
@@ -125,57 +200,153 @@ def main(page: ft.Page):
 
         return ft.View(
             "/login",
-            controls=[
-                ft.Column([
-                    ft.Icon(name=ft.icons.WORK, size=80, color=ft.colors.BLUE),
-                    ft.Text("Welcome to TaskerApp", size=24, weight=ft.FontWeight.BOLD),
-                    phone,
-                    otp,
-                    send_otp_btn,
-                    verify_btn
-                ], alignment=ft.MainAxisAlignment.CENTER)
+            [
+                ft.Stack([
+                    ft.Container(gradient=ft.LinearGradient(
+                        begin=ft.alignment.top_center,
+                        end=ft.alignment.bottom_center,
+                        colors=[ft.colors.BLUE_800, ft.colors.BLUE_600]
+                    ), expand=True),
+                    
+                    ft.Column([
+                        ft.Icon(icons.WORK_OUTLINE, size=80, color=ft.colors.WHITE),
+                        ft.Text("Welcome to\nTaskerApp", 
+                              size=32, 
+                              text_align=ft.TextAlign.CENTER,
+                              color=ft.colors.WHITE,
+                              weight=ft.FontWeight.BOLD),
+                        ft.Container(height=40),
+                        ft.Card(
+                            content=ft.Column([
+                                phone,
+                                otp,
+                                send_otp_btn,
+                                verify_btn
+                            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                            elevation=8,
+                            width=400,
+                            padding=20
+                        )
+                    ], alignment=ft.MainAxisAlignment.CENTER)
+                ])
             ]
         )
-    
-    def main_view():
-        jobs_column = ft.Column()
+
+    # ========== MAIN DASHBOARD ==========
+    def main_dashboard():
+        jobs_column = ft.Column(spacing=15, scroll=ft.ScrollMode.ALWAYS)
+        loading = create_loading_indicator()
         
         def load_jobs():
             jobs_column.controls.clear()
             for job in db.jobs:
                 jobs_column.controls.append(
                     ft.Card(
-                        content=ft.ListTile(
-                            title=ft.Text(job['title'], weight=ft.FontWeight.BOLD),
-                            subtitle=ft.Text(job['description']),
-                            trailing=ft.Text(f"KES {job['budget']}", weight=ft.FontWeight.BOLD, color=ft.colors.GREEN),
-                            on_click=lambda e, j=job: page.snack_bar(ft.SnackBar(ft.Text(f"Selected: {j['title']}")))
-                        )
+                        content=ft.Container(
+                            content=ft.Column([
+                                ft.ListTile(
+                                    title=ft.Text(job['title'], weight=ft.FontWeight.BOLD),
+                                    subtitle=ft.Text(job['description'], max_lines=2),
+                                    trailing=ft.Column([
+                                        ft.Text(f"KES {job['budget']}", 
+                                               weight=ft.FontWeight.BOLD,
+                                               color=ft.colors.GREEN_800),
+                                        ft.Text(job.get('location', 'Nairobi')),
+                                        ft.Text("Posted 2h ago", size=12)
+                                    ])
+                                ),
+                                ft.Divider(height=1),
+                                ft.Row([
+                                    ft.FilledButton("View Details"),
+                                    ft.Icon(icons.STAR, color=ft.colors.AMBER_600),
+                                    ft.Text("4.8", size=14)
+                                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+                            ]),
+                            padding=15
+                        ),
+                        elevation=3,
+                        shadow_color=ft.colors.GREY_300
                     )
                 )
+            loading.visible = False
             page.update()
-        
+
+        page.views.append(
+            ft.View(
+                "/main",
+                [
+                    create_app_bar("Available Jobs"),
+                    ft.Container(
+                        content=ft.Stack([loading, jobs_column]),
+                        padding=20,
+                        expand=True
+                    ),
+                    ft.FloatingActionButton(
+                        icon=icons.ADD,
+                        bgcolor=ft.colors.AMBER_600,
+                        on_click=lambda e: page.go("/post-job")
+                    )
+                ]
+            )
+        )
         load_jobs()
+
+    # ========== JOB POSTING ==========
+    def post_job_view():
+        title = ft.TextField(label="Job Title")
+        description = ft.TextField(label="Description", multiline=True)
+        budget = ft.TextField(label="Budget (KES)", prefix_text="KES ")
+        location = ft.TextField(label="Location")
+        
+        def submit_job(e):
+            db.jobs.append({
+                "id": str(uuid.uuid4()),
+                "title": title.value,
+                "description": description.value,
+                "budget": budget.value,
+                "location": location.value,
+                "client": current_user['phone'],
+                "timestamp": datetime.now().isoformat()
+            })
+            db.save_data()
+            page.go("/main")
+        
         return ft.View(
-            "/main",
-            controls=[
-                ft.AppBar(title=ft.Text("Available Jobs"), bgcolor=ft.colors.BLUE),
-                ft.FloatingActionButton(
-                    icon=ft.icons.ADD, bgcolor=ft.colors.BLUE, on_click=lambda e: page.snack_bar(ft.SnackBar(ft.Text("Post Job Coming Soon")))
-                ),
-                jobs_column
+            "/post-job",
+            [
+                create_app_bar("Post New Job"),
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Create New Job", size=24),
+                        title,
+                        description,
+                        budget,
+                        location,
+                        ft.FilledButton(
+                            "Post Job",
+                            icon=icons.UPLOAD_FILE,
+                            style=ft.ButtonStyle(padding=20),
+                            on_click=submit_job
+                        )
+                    ], spacing=20),
+                    padding=30,
+                    expand=True
+                )
             ]
         )
 
+    # ========== ROUTING ==========
     def route_change(e):
+        page.views.clear()
         if page.route == "/login":
-            page.views.append(login_view())
+            page.views.append(show_login())
         elif page.route == "/main":
-            page.views.append(main_view())
+            main_dashboard()
+        elif page.route == "/post-job":
+            page.views.append(post_job_view())
         page.update()
 
     page.on_route_change = route_change
     page.go("/login")
 
-ft.app(target=main)
-
+ft.app(target=main, view=ft.WEB_BROWSER, port=8500)
