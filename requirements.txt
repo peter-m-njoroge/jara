@@ -12,7 +12,6 @@ exceptiongroup==1.2.2
 fastapi==0.115.8
 flet==0.26.0
 flet-cli==0.26.0
-flet-desktop==0.26.0
 flet-web==0.26.0
 geographiclib==2.0
 geopy==2.4.1
