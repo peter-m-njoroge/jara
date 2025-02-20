@@ -116,6 +116,14 @@ def main(page: ft.Page):
     page.on_route_change = route_change
     page.go("/login")
 
-port = int(os.getenv("PORT", "5000"))
+port = int(os.getenv("PORT", "3000"))  # Railway commonly assigns 3000
+if not os.path.exists("data.json"):
+    with open("data.json", "w") as f:
+        json.dump({"users": [], "jobs": [], "transactions": [], "reviews": []}, f)
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logging.info("🚀 TaskerApp is starting...")
+
 ft.app(target=main, view=ft.WEB_BROWSER, port=port)
 
